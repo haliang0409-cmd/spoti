@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 from datetime import datetime
+import traceback # 引入 traceback 模块用于打印详细错误
 
 import pandas as pd
 import requests
@@ -15,17 +16,13 @@ BASE_CURRENCY = "CNY"
 EXCHANGE_RATE_API_URL = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{BASE_CURRENCY}"
 
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-REPO_URL = os.getenv('REPO_URL') # e.g., https://github.com/your-username/your-repo.git
+REPO_URL = os.getenv('REPO_URL') # 例如: https://github.com/your-username/your-repo.git
 
 TARGET_COUNTRIES = {
     'ng': 'NGN', 'sg': 'SGD', 'in': 'INR', 'us': 'USD', 'gb': 'GBP', 
     'de': 'EUR', 'jp': 'JPY', 'br': 'BRL', 'au': 'AUD', 'ca': 'CAD', 
     'za': 'ZAR', 'tr': 'TRY', 'pk': 'PKR', 'kr': 'KRW'
 }
-
-PLAN_CARD_SELECTOR = '[data-testid="plan-card"]'
-PLAN_NAME_SELECTOR = '[data-testid="plan-title"]'
-PLAN_PRICE_SELECTOR = '[data-testid="plan-price"]'
 
 # --- 辅助函数 ---
 def get_exchange_rates():
@@ -48,18 +45,18 @@ def normalize_plan_name(name):
 def clean_price(price_str):
     price_str = price_str.replace(',', '').replace(' ', '')
     numbers = re.findall(r'[\d\.]+', price_str)
-    return float(numbers) if numbers else None
+    return float(numbers[0]) if numbers else None
 
 # --- 主抓取逻辑 ---
 def scrape_spotify_prices():
-    all_prices =
+    all_prices = []
     rates = get_exchange_rates()
     if not rates:
         print("Halting scrape due to inability to fetch exchange rates.")
         return None
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+        browser = p.chromium.launch(headless=True) # 基础镜像已包含所有依赖，无需 --no-sandbox
         page = browser.new_page()
 
         for code, currency in TARGET_COUNTRIES.items():
@@ -67,13 +64,13 @@ def scrape_spotify_prices():
             print(f"Scraping {url}...")
             try:
                 page.goto(url, timeout=45000)
-                page.wait_for_selector(PLAN_CARD_SELECTOR, timeout=20000)
+                page.wait_for_selector('[data-testid="plan-card"]', timeout=20000)
                 
-                plan_cards = page.locator(PLAN_CARD_SELECTOR).all()
+                plan_cards = page.locator('[data-testid="plan-card"]').all()
                 for card in plan_cards:
                     try:
-                        name = card.locator(PLAN_NAME_SELECTOR).first.inner_text()
-                        price_str = card.locator(PLAN_PRICE_SELECTOR).first.inner_text()
+                        name = card.locator('[data-testid="plan-title"]').first.inner_text()
+                        price_str = card.locator('[data-testid="plan-price"]').first.inner_text()
                         local_price = clean_price(price_str)
                         if local_price is None: continue
 
@@ -106,25 +103,19 @@ def update_repo_with_data(data):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         repo_path = os.path.join(tmpdir, 'repo')
-        
-        # 构建认证后的仓库 URL
         auth_repo_url = REPO_URL.replace('https://', f'https://oauth2:{GITHUB_TOKEN}@')
         
         print("Cloning repository...")
         subprocess.run(['git', 'clone', auth_repo_url, repo_path], check=True)
         
-        # 配置 Git 用户
         subprocess.run(['git', 'config', '--global', 'user.email', 'bot@render.com'], cwd=repo_path, check=True)
-        subprocess.run(, cwd=repo_path, check=True)
+        subprocess.run(['git', 'config', '--global', 'user.name', 'Render Cron Job'], cwd=repo_path, check=True)
 
-        # 写入数据文件
         output_file = os.path.join(repo_path, 'frontend', 'spotify_prices.json')
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-        
         print(f"Data written to {output_file}")
 
-        # 检查是否有变动
         status_result = subprocess.run(['git', 'status', '--porcelain'], cwd=repo_path, check=True, capture_output=True, text=True)
         if not status_result.stdout.strip():
             print("No changes to commit.")
@@ -137,12 +128,24 @@ def update_repo_with_data(data):
         subprocess.run(['git', 'push'], cwd=repo_path, check=True)
         print("Changes pushed to repository successfully.")
 
-# --- 主执行函数 ---
+# --- 主执行函数 (包含错误捕获) ---
 if __name__ == "__main__":
-    print("Starting Spotify price scraping process...")
-    scraped_data = scrape_spotify_prices()
-    if scraped_data:
-        print(f"Successfully scraped {len(scraped_data)} records.")
-        update_repo_with_data(scraped_data)
-    else:
-        print("Scraping process failed or returned no data.")
+    try:
+        print("Starting Spotify price scraping process...")
+        scraped_data = scrape_spotify_prices()
+        if scraped_data:
+            print(f"Successfully scraped {len(scraped_data)} records.")
+            update_repo_with_data(scraped_data)
+        else:
+            print("Scraping process failed or returned no data.")
+        print("Script finished successfully.")
+
+    except Exception as e:
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        print("!!!      AN UNHANDLED EXCEPTION OCCURRED      !!!")
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        traceback.print_exc()
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # 显式地以错误码退出
+        exit(1)
+
