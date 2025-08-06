@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify 全球订阅价格追踪器</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Spotify 全球订阅价格追踪器</h1>
+        <p>比较全球不同地区的 Spotify Premium 套餐价格。数据每日自动更新。</p>
+        <p>点击表头可进行排序，以人民币 (CNY) 显示。</p>
+        
+        <table id="pricesTable" class="display">
+            <thead>
+                <tr>
+                    <th>国家</th>
+                    <th>套餐类型</th>
+                    <th>本地价格</th>
+                    <th>价格 (CNY)</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+        <div class="footer">
+            <p>数据最后更新于: <span id="last-updated">加载中...</span></p>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
